@@ -68,10 +68,12 @@
       <div class="controls">
         <button id="startBtn">Ativar câmera</button>
         <button id="scanBtn" disabled>Identificar carta</button>
+        <button id="autoBtn" class="secondary" disabled>Iniciar identificação contínua</button>
         <button id="stopBtn" class="secondary" disabled>Desligar câmera</button>
       </div>
       <p class="hint">Dica: use boa iluminação, evite reflexos no sleeve e mantenha o nome da carta nítido. A câmera só é acessível em HTTPS ou em localhost.</p>
       <div class="status" id="status" role="status" aria-live="polite">Pronto para começar.</div>
+      <details class="hint" style="margin-top:8px"><summary>Texto lido pela câmera (diagnóstico)</summary><pre id="ocrDebug" style="white-space:pre-wrap;overflow-wrap:anywhere">Ainda não foi feita uma leitura.</pre></details>
 
       <div class="manual">
         <label for="manualName">Ou pesquise pelo nome da carta</label>
@@ -103,7 +105,7 @@
           </div>
         </div>
         <p class="hint" id="extraInfo"></p>
-        <p class="hint">Dados fornecidos pela <a href="https://scryfall.com" target="_blank" rel="noreferrer">Scryfall</a>. A identificação automática usa OCR e pode confundir nomes; confira se a imagem corresponde à carta física.</p>
+        <p class="hint">Dados fornecidos pela <a href="https://scryfall.com" target="_blank" rel="noreferrer">Scryfall</a>. A identificação automática usa OCR com recorte da região do nome e pode confundir cartas parecidas; confira se a imagem corresponde à carta física.</p>
       </div>
     </section>
   </main>
@@ -123,6 +125,12 @@
     const emptyResult = document.getElementById('emptyResult');
     let stream = null;
     let busy = false;
+    let ocrWorker = null;
+    let autoTimer = null;
+    let lastCandidate = '';
+    let repeatedCandidateCount = 0;
+    const autoBtn = document.getElementById('autoBtn');
+    const ocrDebug = document.getElementById('ocrDebug');
 
     function setStatus(message, type='') {
       statusEl.textContent = message;
@@ -147,13 +155,15 @@
         startBtn.disabled = true;
         scanBtn.disabled = false;
         stopBtn.disabled = false;
-        setStatus('Câmera ativa. Posicione a carta e clique em “Identificar carta”.', 'good');
+        autoBtn.disabled = false;
+        setStatus('Câmera ativa. Centralize a carta inteira; você pode identificar uma vez ou iniciar a identificação contínua.', 'good');
       } catch (err) {
         setStatus('Não foi possível acessar a câmera. Verifique se ela está conectada, se outro programa a está usando e se você autorizou o acesso. Detalhe: ' + err.message, 'error');
       }
     }
 
     function stopCamera() {
+      stopAutoScan();
       if (stream) stream.getTracks().forEach(track => track.stop());
       stream = null;
       video.srcObject = null;
@@ -163,6 +173,7 @@
       startBtn.disabled = false;
       scanBtn.disabled = true;
       stopBtn.disabled = true;
+      autoBtn.disabled = true;
       setStatus('Câmera desligada.');
     }
 
@@ -170,50 +181,110 @@
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      // OCR na imagem inteira: simples para o primeiro protótipo.
       return canvas;
+    }
+
+    // Recorta a faixa superior central, onde normalmente fica o nome, e amplia para ajudar o OCR.
+    function makeTitleCrop(source) {
+      const crop = document.createElement('canvas');
+      const sx = Math.round(source.width * 0.16);
+      const sy = Math.round(source.height * 0.02);
+      const sw = Math.round(source.width * 0.68);
+      const sh = Math.round(source.height * 0.32);
+      crop.width = Math.min(sw * 2, 1400);
+      crop.height = Math.round(crop.width * sh / sw);
+      const ctx = crop.getContext('2d', { willReadFrequently: true });
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(source, sx, sy, sw, sh, 0, 0, crop.width, crop.height);
+      // Aumenta contraste sem depender de bibliotecas adicionais.
+      const image = ctx.getImageData(0, 0, crop.width, crop.height);
+      for (let i = 0; i < image.data.length; i += 4) {
+        const gray = image.data[i] * 0.299 + image.data[i+1] * 0.587 + image.data[i+2] * 0.114;
+        const adjusted = gray < 145 ? Math.max(0, gray * 0.72) : Math.min(255, gray * 1.16 + 18);
+        image.data[i] = image.data[i+1] = image.data[i+2] = adjusted;
+      }
+      ctx.putImageData(image, 0, 0);
+      return crop;
+    }
+
+    async function getOcrWorker() {
+      if (!window.Tesseract) throw new Error('O OCR não carregou. Verifique a internet e recarregue a página.');
+      if (!ocrWorker) {
+        setStatus('Preparando o reconhecimento de texto pela primeira vez…');
+        ocrWorker = await Tesseract.createWorker('eng');
+        await ocrWorker.setParameters({
+          tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE,
+          preserve_interword_spaces: '1'
+        });
+      }
+      return ocrWorker;
+    }
+
+    function cleanCandidate(value) {
+      return (value || '')
+        .replace(/[|!¡]/g, 'I')
+        .replace(/[“”]/g, '"')
+        .replace(/[^A-Za-zÀ-ÿ0-9'’:, -]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .replace(/^[^A-Za-zÀ-ÿ0-9]+|[^A-Za-zÀ-ÿ0-9]+$/g, '')
+        .trim();
+    }
+
+    async function recognizeCandidates() {
+      const frame = captureFrame();
+      const worker = await getOcrWorker();
+      const titleCrop = makeTitleCrop(frame);
+      const titleResult = await worker.recognize(titleCrop);
+      const titleText = cleanCandidate(titleResult.data.text);
+      let fullText = '';
+      // Se o recorte do nome não der resultado, tenta a imagem inteira como plano B.
+      if (titleText.length < 3 || (titleResult.data.confidence || 0) < 18) {
+        await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.AUTO });
+        const fullResult = await worker.recognize(frame);
+        fullText = fullResult.data.text || '';
+        await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE });
+      }
+      ocrDebug.textContent = 'Faixa do nome: ' + (titleText || '(nada legível)') +
+        '\nConfiança OCR: ' + Math.round(titleResult.data.confidence || 0) + '%' +
+        (fullText ? '\n\nLeitura alternativa:\n' + fullText : '');
+      const lines = [titleText, ...fullText.split(/\r?\n/).map(cleanCandidate)]
+        .filter(Boolean)
+        .filter(line => line.length >= 3 && line.length <= 70);
+      const unique = [];
+      for (const line of lines) if (!unique.some(x => x.toLowerCase() === line.toLowerCase())) unique.push(line);
+      return unique.slice(0, 8);
     }
 
     async function identifyFromCamera() {
       if (!video.videoWidth || busy) return;
-      if (!window.Tesseract) {
-        setStatus('O mecanismo OCR não carregou. Verifique sua conexão com a internet e recarregue a página.', 'error');
-        return;
-      }
       busy = true;
       scanBtn.disabled = true;
-      setStatus('Lendo o texto da carta… Na primeira execução, o OCR pode levar um pouco para carregar.');
       try {
-        const canvas = captureFrame();
-        const worker = await Tesseract.createWorker('eng');
-        const result = await worker.recognize(canvas);
-        await worker.terminate();
-        const text = result.data.text || '';
-        const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-        const candidates = lines
-          .map(line => line.replace(/[^A-Za-zÀ-ÿ'’,\- ]/g, ' ').replace(/\s+/g, ' ').trim())
-          .filter(line => line.length >= 3 && line.length <= 55);
-        // O nome costuma aparecer nas primeiras linhas da carta. Testamos algumas opções.
-        const candidatePool = [...candidates.slice(0, 5), ...candidates.slice(5, 10)];
-        if (!candidatePool.length) throw new Error('Não consegui ler texto suficiente. Tente aproximar a carta e melhorar a iluminação.');
-        setStatus('Texto detectado: "' + candidatePool[0] + '". Consultando o catálogo…');
+        setStatus('Lendo a faixa do nome da carta…');
+        const candidates = await recognizeCandidates();
+        if (!candidates.length) throw new Error('Não consegui ler o nome. Centralize a carta, aproxime um pouco e evite reflexos.');
+        setStatus('Texto detectado: "' + candidates[0] + '". Conferindo no catálogo…');
         let found = false;
-        for (const candidate of candidatePool.slice(0, 8)) {
+        for (const candidate of candidates) {
           try {
             const card = await fetchCard(candidate, true);
-            if (card) {
+            // A API fuzzy pode retornar uma carta incorreta; exigir alguma semelhança no nome.
+            const wanted = normalizeName(candidate);
+            const returned = normalizeName(card.name || '');
+            if (wanted.length >= 4 && (returned.includes(wanted) || wanted.includes(returned) || nameSimilarity(wanted, returned) >= 0.55)) {
               showCard(card);
-              setStatus('Carta encontrada. Confira se a imagem corresponde à carta física.', 'good');
+              setStatus('Possível correspondência: ' + (card.printed_name || card.name) + '. Confira a imagem com a carta física.', 'good');
               found = true;
               break;
             }
           } catch (_) {}
         }
         if (!found) {
-          document.getElementById('manualName').value = candidatePool[0];
-          throw new Error('Não encontrei uma correspondência segura. Você pode corrigir o nome no campo de pesquisa abaixo.');
+          document.getElementById('manualName').value = candidates[0];
+          throw new Error('O texto foi lido, mas não encontrei uma correspondência confiável. Veja o diagnóstico abaixo e tente novamente com a carta mais centralizada.');
         }
       } catch (err) {
         setStatus(err.message || 'Ocorreu um erro durante a identificação.', 'error');
@@ -221,6 +292,40 @@
         busy = false;
         scanBtn.disabled = !stream;
       }
+    }
+
+    function normalizeName(value) {
+      return (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
+
+    function nameSimilarity(a, b) {
+      if (!a || !b) return 0;
+      const rows = Array.from({length: a.length + 1}, (_, i) => [i]);
+      for (let j = 0; j <= b.length; j++) rows[0][j] = j;
+      for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
+        rows[i][j] = Math.min(rows[i-1][j] + 1, rows[i][j-1] + 1, rows[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+      }
+      return 1 - rows[a.length][b.length] / Math.max(a.length, b.length);
+    }
+
+    function startAutoScan() {
+      if (autoTimer) { stopAutoScan(); return; }
+      autoBtn.textContent = 'Parar identificação contínua';
+      scanBtn.disabled = true;
+      setStatus('Identificação contínua ativa. Mantenha a carta parada por alguns instantes.');
+      autoTimer = setInterval(async () => {
+        if (busy || !stream) return;
+        await identifyFromCamera();
+      }, 2200);
+      // Faz uma tentativa imediata.
+      identifyFromCamera();
+    }
+
+    function stopAutoScan() {
+      if (autoTimer) clearInterval(autoTimer);
+      autoTimer = null;
+      autoBtn.textContent = 'Iniciar identificação contínua';
+      scanBtn.disabled = !stream || busy;
     }
 
     async function fetchCard(name, fuzzy=false) {
@@ -280,8 +385,10 @@
     }
 
     startBtn.addEventListener('click', startCamera);
+    autoBtn.addEventListener('click', startAutoScan);
     stopBtn.addEventListener('click', stopCamera);
     scanBtn.addEventListener('click', identifyFromCamera);
+    window.addEventListener('pagehide', () => { if (ocrWorker) ocrWorker.terminate(); if (stream) stream.getTracks().forEach(track => track.stop()); });
     document.getElementById('searchBtn').addEventListener('click', searchManual);
     document.getElementById('manualName').addEventListener('keydown', e => { if (e.key === 'Enter') searchManual(); });
   </script>
