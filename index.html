@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Biblioteca Phyrexiana — Identificador de Cartas</title>
+  <style>
+    :root { color-scheme: dark; --bg:#101317; --panel:#1a2027; --panel2:#222b34; --text:#f3f5f7; --muted:#aeb8c2; --accent:#a9e34b; --border:#36414c; --danger:#ff8787; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:radial-gradient(ellipse at top,#1c2930 0%,var(--bg) 58%); color:var(--text); font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+    header { padding:28px 18px 18px; text-align:center; }
+    .mark { display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; border:1px solid #64802e; border-radius:14px; color:var(--accent); font-size:25px; margin-bottom:10px; }
+    h1 { margin:0; font-size:clamp(1.6rem,4vw,2.4rem); letter-spacing:-.04em; }
+    header p { margin:8px auto 0; max-width:660px; color:var(--muted); }
+    main { max-width:1120px; padding:12px 16px 40px; margin:auto; display:grid; grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr); gap:18px; }
+    .panel { background:rgba(26,32,39,.94); border:1px solid var(--border); border-radius:18px; padding:18px; min-width:0; box-shadow:0 12px 36px #0002; }
+    h2 { font-size:1.12rem; margin:0 0 12px; }
+    .camera-box { position:relative; background:#080a0c; border:1px solid var(--border); border-radius:12px; overflow:hidden; aspect-ratio:4/3; display:grid; place-items:center; }
+    video { width:100%; height:100%; object-fit:cover; display:none; }
+    .placeholder { padding:20px; text-align:center; color:var(--muted); }
+    .guide { position:absolute; inset:7% 20%; border:2px dashed #a9e34b99; border-radius:12px; pointer-events:none; display:none; box-shadow:0 0 0 999px #0002; }
+    .controls { display:flex; flex-wrap:wrap; gap:9px; margin-top:13px; }
+    button { border:0; border-radius:10px; padding:11px 15px; font:600 .95rem system-ui,sans-serif; cursor:pointer; background:var(--accent); color:#18200d; }
+    button.secondary { background:var(--panel2); color:var(--text); border:1px solid var(--border); }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    .hint { color:var(--muted); font-size:.88rem; margin:12px 0 0; }
+    .status { margin-top:12px; min-height:24px; font-size:.92rem; color:var(--muted); }
+    .status.error { color:var(--danger); }
+    .status.good { color:var(--accent); }
+    .result-empty { min-height:360px; display:grid; place-items:center; text-align:center; color:var(--muted); padding:20px; }
+    .result { display:none; }
+    .card-top { display:grid; grid-template-columns:minmax(130px, .8fr) minmax(0,1.2fr); gap:16px; align-items:start; }
+    .card-img { width:100%; max-width:270px; border-radius:12px; box-shadow:0 8px 25px #0005; display:block; margin:auto; }
+    .card-name { font-size:1.35rem; line-height:1.2; margin:0 0 6px; }
+    .mana { color:var(--accent); font-weight:700; margin-bottom:10px; }
+    .type { color:#d6dde4; font-size:.94rem; margin-bottom:12px; }
+    .rules { white-space:pre-wrap; background:#11161b; border:1px solid var(--border); border-radius:10px; padding:12px; font-size:.92rem; }
+    .meta { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:12px; }
+    .meta div { background:var(--panel2); padding:9px 10px; border-radius:9px; min-width:0; }
+    .meta small { display:block; color:var(--muted); font-size:.75rem; }
+    .meta strong { display:block; overflow-wrap:anywhere; font-size:.9rem; }
+    .manual { margin-top:18px; border-top:1px solid var(--border); padding-top:16px; }
+    label { display:block; color:var(--muted); font-size:.9rem; margin-bottom:6px; }
+    input { width:100%; border:1px solid var(--border); background:#11161b; color:var(--text); padding:11px 12px; border-radius:10px; font:inherit; }
+    .manual-row { display:flex; gap:8px; }
+    .manual-row button { flex-shrink:0; }
+    footer { color:var(--muted); text-align:center; font-size:.82rem; padding:0 16px 28px; }
+    a { color:var(--accent); }
+    @media(max-width:780px) { main { grid-template-columns:1fr; } .result-empty { min-height:180px; } }
+    @media(max-width:430px) { .card-top { grid-template-columns:1fr; } .card-img { max-width:220px; } .manual-row { flex-direction:column; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="mark" aria-hidden="true">Φ</div>
+    <h1>Biblioteca Phyrexiana</h1>
+    <p>Protótipo 0.1 · Identificador de cartas de Magic: The Gathering por câmera</p>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>1. Apresente uma carta</h2>
+      <div class="camera-box">
+        <video id="video" autoplay playsinline muted></video>
+        <div class="placeholder" id="placeholder">Ative a câmera e posicione a carta inteira dentro da área de visualização.</div>
+        <div class="guide" id="guide"></div>
+      </div>
+      <div class="controls">
+        <button id="startBtn">Ativar câmera</button>
+        <button id="scanBtn" disabled>Identificar carta</button>
+        <button id="stopBtn" class="secondary" disabled>Desligar câmera</button>
+      </div>
+      <p class="hint">Dica: use boa iluminação, evite reflexos no sleeve e mantenha o nome da carta nítido. A câmera só é acessível em HTTPS ou em localhost.</p>
+      <div class="status" id="status" role="status" aria-live="polite">Pronto para começar.</div>
+
+      <div class="manual">
+        <label for="manualName">Ou pesquise pelo nome da carta</label>
+        <div class="manual-row">
+          <input id="manualName" type="text" placeholder="Ex.: Sol Ring" autocomplete="off" />
+          <button id="searchBtn">Pesquisar</button>
+        </div>
+        <p class="hint">A pesquisa manual permite testar a consulta ao catálogo mesmo se a câmera ou o OCR não funcionarem no seu navegador.</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>2. Informações da carta</h2>
+      <div class="result-empty" id="emptyResult">A carta identificada aparecerá aqui, com imagem, custo de mana, tipo e texto de regras.</div>
+      <div class="result" id="result">
+        <div class="card-top">
+          <img id="cardImage" class="card-img" alt="Imagem da carta identificada" />
+          <div>
+            <h3 class="card-name" id="cardName"></h3>
+            <div class="mana" id="mana"></div>
+            <div class="type" id="typeLine"></div>
+            <div class="rules" id="rules"></div>
+            <div class="meta">
+              <div><small>Edição</small><strong id="setName">—</strong></div>
+              <div><small>Raridade</small><strong id="rarity">—</strong></div>
+              <div><small>Número</small><strong id="collector">—</strong></div>
+              <div><small>Artista</small><strong id="artist">—</strong></div>
+            </div>
+          </div>
+        </div>
+        <p class="hint" id="extraInfo"></p>
+        <p class="hint">Dados fornecidos pela <a href="https://scryfall.com" target="_blank" rel="noreferrer">Scryfall</a>. A identificação automática usa OCR e pode confundir nomes; confira se a imagem corresponde à carta física.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>Protótipo experimental — ainda não registra partidas nem interpreta jogadas.</footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script>
+    const video = document.getElementById('video');
+    const placeholder = document.getElementById('placeholder');
+    const guide = document.getElementById('guide');
+    const startBtn = document.getElementById('startBtn');
+    const scanBtn = document.getElementById('scanBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const statusEl = document.getElementById('status');
+    const resultEl = document.getElementById('result');
+    const emptyResult = document.getElementById('emptyResult');
+    let stream = null;
+    let busy = false;
+
+    function setStatus(message, type='') {
+      statusEl.textContent = message;
+      statusEl.className = 'status ' + type;
+    }
+
+    async function startCamera() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setStatus('Este navegador não disponibilizou a câmera. Abra a aplicação em HTTPS ou localhost e verifique as permissões.', 'error');
+        return;
+      }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false
+        });
+        video.srcObject = stream;
+        video.style.display = 'block';
+        placeholder.style.display = 'none';
+        guide.style.display = 'block';
+        await video.play();
+        startBtn.disabled = true;
+        scanBtn.disabled = false;
+        stopBtn.disabled = false;
+        setStatus('Câmera ativa. Posicione a carta e clique em “Identificar carta”.', 'good');
+      } catch (err) {
+        setStatus('Não foi possível acessar a câmera. Verifique se ela está conectada, se outro programa a está usando e se você autorizou o acesso. Detalhe: ' + err.message, 'error');
+      }
+    }
+
+    function stopCamera() {
+      if (stream) stream.getTracks().forEach(track => track.stop());
+      stream = null;
+      video.srcObject = null;
+      video.style.display = 'none';
+      placeholder.style.display = 'block';
+      guide.style.display = 'none';
+      startBtn.disabled = false;
+      scanBtn.disabled = true;
+      stopBtn.disabled = true;
+      setStatus('Câmera desligada.');
+    }
+
+    function captureFrame() {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      // OCR na imagem inteira: simples para o primeiro protótipo.
+      return canvas;
+    }
+
+    async function identifyFromCamera() {
+      if (!video.videoWidth || busy) return;
+      if (!window.Tesseract) {
+        setStatus('O mecanismo OCR não carregou. Verifique sua conexão com a internet e recarregue a página.', 'error');
+        return;
+      }
+      busy = true;
+      scanBtn.disabled = true;
+      setStatus('Lendo o texto da carta… Na primeira execução, o OCR pode levar um pouco para carregar.');
+      try {
+        const canvas = captureFrame();
+        const worker = await Tesseract.createWorker('eng');
+        const result = await worker.recognize(canvas);
+        await worker.terminate();
+        const text = result.data.text || '';
+        const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+        const candidates = lines
+          .map(line => line.replace(/[^A-Za-zÀ-ÿ'’,\- ]/g, ' ').replace(/\s+/g, ' ').trim())
+          .filter(line => line.length >= 3 && line.length <= 55);
+        // O nome costuma aparecer nas primeiras linhas da carta. Testamos algumas opções.
+        const candidatePool = [...candidates.slice(0, 5), ...candidates.slice(5, 10)];
+        if (!candidatePool.length) throw new Error('Não consegui ler texto suficiente. Tente aproximar a carta e melhorar a iluminação.');
+        setStatus('Texto detectado: "' + candidatePool[0] + '". Consultando o catálogo…');
+        let found = false;
+        for (const candidate of candidatePool.slice(0, 8)) {
+          try {
+            const card = await fetchCard(candidate, true);
+            if (card) {
+              showCard(card);
+              setStatus('Carta encontrada. Confira se a imagem corresponde à carta física.', 'good');
+              found = true;
+              break;
+            }
+          } catch (_) {}
+        }
+        if (!found) {
+          document.getElementById('manualName').value = candidatePool[0];
+          throw new Error('Não encontrei uma correspondência segura. Você pode corrigir o nome no campo de pesquisa abaixo.');
+        }
+      } catch (err) {
+        setStatus(err.message || 'Ocorreu um erro durante a identificação.', 'error');
+      } finally {
+        busy = false;
+        scanBtn.disabled = !stream;
+      }
+    }
+
+    async function fetchCard(name, fuzzy=false) {
+      const endpoint = fuzzy
+        ? 'https://api.scryfall.com/cards/named?fuzzy=' + encodeURIComponent(name)
+        : 'https://api.scryfall.com/cards/named?exact=' + encodeURIComponent(name);
+      const response = await fetch(endpoint);
+      if (!response.ok) {
+        if (response.status === 404) throw new Error('A Scryfall não encontrou uma carta com esse nome.');
+        throw new Error('A consulta à Scryfall falhou (HTTP ' + response.status + '). Tente novamente.');
+      }
+      return response.json();
+    }
+
+    async function searchManual() {
+      const name = document.getElementById('manualName').value.trim();
+      if (!name) {
+        setStatus('Digite o nome de uma carta para pesquisar.', 'error');
+        return;
+      }
+      document.getElementById('searchBtn').disabled = true;
+      setStatus('Consultando a Scryfall…');
+      try {
+        const card = await fetchCard(name, false);
+        showCard(card);
+        setStatus('Carta encontrada.', 'good');
+      } catch (err) {
+        setStatus(err.message, 'error');
+      } finally {
+        document.getElementById('searchBtn').disabled = false;
+      }
+    }
+
+    function showCard(card) {
+      const image = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || '';
+      document.getElementById('cardImage').src = image;
+      document.getElementById('cardImage').alt = 'Carta ' + (card.name || '');
+      document.getElementById('cardName').textContent = card.printed_name || card.name || 'Nome indisponível';
+      document.getElementById('mana').textContent = card.mana_cost || card.card_faces?.[0]?.mana_cost || 'Sem custo de mana';
+      document.getElementById('typeLine').textContent = card.printed_type_line || card.type_line || card.card_faces?.[0]?.type_line || '';
+      document.getElementById('rules').textContent = card.printed_text || card.oracle_text || card.card_faces?.map(f => f.oracle_text || '').filter(Boolean).join('\n//\n') || 'Texto de regras indisponível.';
+      document.getElementById('setName').textContent = card.set_name || '—';
+      document.getElementById('rarity').textContent = translateRarity(card.rarity);
+      document.getElementById('collector').textContent = card.collector_number || '—';
+      document.getElementById('artist').textContent = card.artist || '—';
+      const details = [];
+      if (card.power !== undefined && card.toughness !== undefined) details.push('Força/Resistência: ' + card.power + '/' + card.toughness);
+      if (card.loyalty) details.push('Lealdade: ' + card.loyalty);
+      if (card.oracle_id) details.push('Oracle ID: ' + card.oracle_id);
+      document.getElementById('extraInfo').textContent = details.join(' · ');
+      emptyResult.style.display = 'none';
+      resultEl.style.display = 'block';
+    }
+
+    function translateRarity(rarity) {
+      return ({common:'Comum', uncommon:'Incomum', rare:'Rara', mythic:'Mítica', special:'Especial', bonus:'Bônus'})[rarity] || rarity || '—';
+    }
+
+    startBtn.addEventListener('click', startCamera);
+    stopBtn.addEventListener('click', stopCamera);
+    scanBtn.addEventListener('click', identifyFromCamera);
+    document.getElementById('searchBtn').addEventListener('click', searchManual);
+    document.getElementById('manualName').addEventListener('keydown', e => { if (e.key === 'Enter') searchManual(); });
+  </script>
+</body>
+</html>
