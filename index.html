@@ -5,26 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Biblioteca Phyrexiana — Identificador de Cartas</title>
   <style>
-    :root { color-scheme: dark; --bg:#101317; --panel:#1a2027; --panel2:#222b34; --text:#f3f5f7; --muted:#aeb8c2; --accent:#a9e34b; --border:#36414c; --danger:#ff8787; }
+    :root { color-scheme: dark; --bg:#101317; --panel:#1a2027; --panel2:#222b34; --text:#f3f5f7; --muted:#aeb8c2; --accent:#a9e34b; --border:#36414c; --danger:#ff8787; --warn:#ffd43b; }
     * { box-sizing:border-box; }
     body { margin:0; background:radial-gradient(ellipse at top,#1c2930 0%,var(--bg) 58%); color:var(--text); font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
     header { padding:28px 18px 18px; text-align:center; }
     .mark { display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; border:1px solid #64802e; border-radius:14px; color:var(--accent); font-size:25px; margin-bottom:10px; }
     h1 { margin:0; font-size:clamp(1.6rem,4vw,2.4rem); letter-spacing:-.04em; }
     header p { margin:8px auto 0; max-width:660px; color:var(--muted); }
-    main { max-width:1120px; padding:12px 16px 40px; margin:auto; display:grid; grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr); gap:18px; }
+    main { max-width:1120px; padding:12px 16px 20px; margin:auto; display:grid; grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr); gap:18px; }
+    .wide { max-width:1120px; margin:0 auto; padding:0 16px 40px; }
     .panel { background:rgba(26,32,39,.94); border:1px solid var(--border); border-radius:18px; padding:18px; min-width:0; box-shadow:0 12px 36px #0002; }
     h2 { font-size:1.12rem; margin:0 0 12px; }
-    .camera-box { position:relative; background:#080a0c; border:1px solid var(--border); border-radius:12px; overflow:hidden; aspect-ratio:4/3; display:grid; place-items:center; }
-    video { width:100%; height:100%; object-fit:cover; display:none; }
+    .tabs { display:inline-flex; background:var(--panel2); border:1px solid var(--border); border-radius:12px; padding:3px; margin-bottom:12px; }
+    .tabs button { background:transparent; color:var(--muted); padding:8px 14px; border-radius:9px; }
+    .tabs button.active { background:var(--accent); color:#18200d; }
+    .camera-box { position:relative; background:#080a0c; border:1px solid var(--border); border-radius:12px; overflow:hidden; aspect-ratio:16/9; display:grid; place-items:center; }
+    video { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; display:none; }
+    #overlay { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
     .placeholder { padding:20px; text-align:center; color:var(--muted); }
-    /* Moldura no formato real de uma carta (63x88 mm). O nome fica na faixa destacada no topo. */
-    .guide { position:absolute; top:5%; height:90%; left:50%; transform:translateX(-50%); aspect-ratio:63/88; border:2px dashed #a9e34bcc; border-radius:10px; pointer-events:none; display:none; box-shadow:0 0 0 999px #0004; }
-    .guide::before { content:''; position:absolute; left:3%; right:22%; top:3%; height:8%; border:2px solid #a9e34b; border-radius:4px; }
-    .controls { display:flex; flex-wrap:wrap; gap:9px; margin-top:13px; }
-    button { border:0; border-radius:10px; padding:11px 15px; font:600 .95rem system-ui,sans-serif; cursor:pointer; background:var(--accent); color:#18200d; }
-    button.secondary { background:var(--panel2); color:var(--text); border:1px solid var(--border); }
+    .controls { display:flex; flex-wrap:wrap; gap:9px; margin-top:13px; align-items:center; }
+    .controls[hidden] { display:none; }
+    button, .filebtn { border:0; border-radius:10px; padding:11px 15px; font:600 .95rem system-ui,sans-serif; cursor:pointer; background:var(--accent); color:#18200d; }
+    button.secondary, .filebtn { background:var(--panel2); color:var(--text); border:1px solid var(--border); }
     button:disabled { opacity:.5; cursor:not-allowed; }
+    .filebtn { display:inline-block; margin:0; }
+    .filebtn input { display:none; }
+    select { background:#11161b; color:var(--text); border:1px solid var(--border); border-radius:10px; padding:10px; font:inherit; }
+    progress { width:100%; height:10px; accent-color:var(--accent); }
     .hint { color:var(--muted); font-size:.88rem; margin:12px 0 0; }
     .status { margin-top:12px; min-height:24px; font-size:.92rem; color:var(--muted); }
     .status.error { color:var(--danger); }
@@ -43,12 +50,32 @@
     .meta strong { display:block; overflow-wrap:anywhere; font-size:.9rem; }
     .manual { margin-top:18px; border-top:1px solid var(--border); padding-top:16px; }
     label { display:block; color:var(--muted); font-size:.9rem; margin-bottom:6px; }
-    input { width:100%; border:1px solid var(--border); background:#11161b; color:var(--text); padding:11px 12px; border-radius:10px; font:inherit; }
+    input[type=text] { width:100%; border:1px solid var(--border); background:#11161b; color:var(--text); padding:11px 12px; border-radius:10px; font:inherit; }
     .manual-row { display:flex; gap:8px; }
     .manual-row button { flex-shrink:0; }
+    .tl-head { display:flex; flex-wrap:wrap; gap:10px; justify-content:space-between; align-items:center; margin-bottom:8px; }
+    .tl-head h2 { margin:0; }
+    .tl-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .tl-actions button { padding:8px 12px; }
+    #timeline { list-style:none; margin:0; padding:0; max-height:420px; overflow:auto; border:1px solid var(--border); border-radius:12px; }
+    #timeline li { display:grid; grid-template-columns:64px 112px minmax(0,1fr) auto; gap:10px; align-items:center; padding:9px 12px; border-bottom:1px solid var(--border); cursor:pointer; font-size:.92rem; }
+    #timeline li:last-child { border-bottom:0; }
+    #timeline li:hover { background:var(--panel2); }
+    #timeline .t { color:var(--muted); font-variant-numeric:tabular-nums; }
+    #timeline .zone { color:var(--muted); font-size:.82rem; }
+    #timeline .badge { font-size:.76rem; font-weight:700; padding:2px 8px; border-radius:99px; text-align:center; background:#2b3640; }
+    #timeline .badge.apareceu { background:#34501a; color:#d8f5a2; }
+    #timeline .badge.moveu { background:#1d4560; color:#bfe3ff; }
+    #timeline .badge.girou { background:#5a4a14; color:#ffe9a6; }
+    #timeline .badge.sumiu { background:#4a2323; color:#ffc9c9; }
+    .tl-empty { color:var(--muted); padding:22px; text-align:center; border:1px dashed var(--border); border-radius:12px; }
+    .dbg { display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; }
+    .dbg figure { margin:0; background:#11161b; border:1px solid var(--border); border-radius:10px; padding:6px; width:150px; }
+    .dbg canvas { width:100%; display:block; background:#fff; border-radius:4px; margin-bottom:4px; }
+    .dbg figcaption { font-size:.76rem; color:var(--muted); overflow-wrap:anywhere; }
     footer { color:var(--muted); text-align:center; font-size:.82rem; padding:0 16px 28px; }
     a { color:var(--accent); }
-    @media(max-width:780px) { main { grid-template-columns:1fr; } .result-empty { min-height:180px; } }
+    @media(max-width:780px) { main { grid-template-columns:1fr; } .result-empty { min-height:180px; } #timeline li { grid-template-columns:52px 96px minmax(0,1fr); } #timeline .zone { display:none; } }
     @media(max-width:430px) { .card-top { grid-template-columns:1fr; } .card-img { max-width:220px; } .manual-row { flex-direction:column; } }
   </style>
 </head>
@@ -56,26 +83,47 @@
   <header>
     <div class="mark" aria-hidden="true">Φ</div>
     <h1>Biblioteca Phyrexiana</h1>
-    <p>Protótipo 0.5 · Identificador de cartas de Magic: The Gathering por câmera</p>
+    <p>Protótipo 0.6 · Cartas de Magic: The Gathering em qualquer parte do quadro, ao vivo ou em partidas gravadas</p>
   </header>
 
   <main>
     <section class="panel">
-      <h2>1. Apresente uma carta</h2>
-      <div class="camera-box">
-        <video id="video" autoplay playsinline muted></video>
-        <div class="placeholder" id="placeholder">Ative a câmera e encaixe a carta inteira na moldura, com o nome dentro do retângulo verde.</div>
-        <div class="guide" id="guide"></div>
+      <h2>1. Mostre a mesa</h2>
+      <div class="tabs" role="tablist">
+        <button id="tabCamera" class="active" role="tab">Câmera ao vivo</button>
+        <button id="tabFile" role="tab">Vídeo gravado</button>
       </div>
-      <div class="controls">
+      <div class="camera-box" id="cameraBox">
+        <video id="video" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <div class="placeholder" id="placeholder">Ative a câmera ou escolha um vídeo. As cartas são encontradas em qualquer posição do quadro, mesmo giradas ou viradas.</div>
+      </div>
+
+      <div class="controls" id="cameraControls">
         <button id="startBtn">Ativar câmera</button>
-        <button id="scanBtn" disabled>Identificar carta</button>
-        <button id="autoBtn" class="secondary" disabled>Iniciar identificação contínua</button>
+        <button id="autoBtn" class="secondary" disabled>Identificação contínua</button>
         <button id="stopBtn" class="secondary" disabled>Desligar câmera</button>
       </div>
-      <p class="hint">Dica: use boa iluminação, evite reflexos no sleeve e mantenha o nome da carta nítido. A câmera só é acessível em HTTPS ou em localhost.</p>
+      <div class="controls" id="fileControls" hidden>
+        <label class="filebtn">Escolher vídeo<input id="fileInput" type="file" accept="video/*" /></label>
+        <select id="stepSel" title="Intervalo entre quadros analisados">
+          <option value="0.5">a cada 0,5 s</option>
+          <option value="1" selected>a cada 1 s</option>
+          <option value="2">a cada 2 s</option>
+          <option value="5">a cada 5 s</option>
+        </select>
+        <button id="analyzeBtn" disabled>Analisar partida</button>
+        <button id="cancelBtn" class="secondary" disabled>Parar</button>
+      </div>
+      <div class="controls">
+        <button id="scanBtn" class="secondary" disabled>Identificar quadro atual</button>
+      </div>
+      <progress id="progress" value="0" max="1" hidden></progress>
+      <p class="hint">Dica: quanto maior a carta no vídeo, melhor a leitura. Cartas com menos de ~100 px de largura são marcadas como pequenas demais. A câmera só é acessível em HTTPS ou localhost.</p>
       <div class="status" id="status" role="status" aria-live="polite">Pronto para começar.</div>
-      <details class="hint" style="margin-top:8px"><summary>Texto lido pela câmera (diagnóstico)</summary><pre id="ocrDebug" style="white-space:pre-wrap;overflow-wrap:anywhere">Ainda não foi feita uma leitura.</pre></details>
+      <details class="hint" style="margin-top:8px"><summary>O que o detector está lendo (diagnóstico)</summary>
+        <div id="ocrDebug">Ainda não foi feita uma leitura.</div>
+      </details>
 
       <div class="manual">
         <label for="manualName">Ou pesquise pelo nome da carta</label>
@@ -83,7 +131,6 @@
           <input id="manualName" type="text" placeholder="Ex.: Sol Ring" autocomplete="off" />
           <button id="searchBtn">Pesquisar</button>
         </div>
-        <p class="hint">A pesquisa manual permite testar a consulta ao catálogo mesmo se a câmera ou o OCR não funcionarem no seu navegador.</p>
       </div>
     </section>
 
@@ -107,177 +154,296 @@
           </div>
         </div>
         <p class="hint" id="extraInfo"></p>
-        <p class="hint">Dados fornecidos pela <a href="https://scryfall.com" target="_blank" rel="noreferrer">Scryfall</a>. A identificação automática usa OCR com recorte da região do nome e pode confundir cartas parecidas; confira se a imagem corresponde à carta física.</p>
+        <p class="hint">Dados fornecidos pela <a href="https://scryfall.com" target="_blank" rel="noreferrer">Scryfall</a>. A identificação usa OCR do nome e pode confundir cartas parecidas; confira com a imagem.</p>
       </div>
     </section>
   </main>
 
-  <footer>Protótipo experimental — ainda não registra partidas nem interpreta jogadas.</footer>
+  <section class="wide">
+    <div class="panel">
+      <div class="tl-head">
+        <h2>3. Linha do tempo da partida</h2>
+        <div class="tl-actions">
+          <button id="exportJson" class="secondary" disabled>Exportar JSON</button>
+          <button id="exportCsv" class="secondary" disabled>Exportar CSV</button>
+          <button id="clearTl" class="secondary" disabled>Limpar</button>
+        </div>
+      </div>
+      <div class="tl-empty" id="tlEmpty">Os eventos aparecem aqui: carta que apareceu, que mudou de lugar, que girou 90° (possível virar/desvirar) e que saiu da mesa. Clique em um evento para ver a carta.</div>
+      <ul id="timeline" hidden></ul>
+      <p class="hint" id="tlSummary"></p>
+    </div>
+  </section>
+
+  <footer>Protótipo experimental — registra aparições e movimentos de cartas; ainda não interpreta jogadas (conjurar, atacar, fases do turno).</footer>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script>
-    const video = document.getElementById('video');
-    const placeholder = document.getElementById('placeholder');
-    const guide = document.getElementById('guide');
-    const startBtn = document.getElementById('startBtn');
-    const scanBtn = document.getElementById('scanBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const statusEl = document.getElementById('status');
-    const resultEl = document.getElementById('result');
-    const emptyResult = document.getElementById('emptyResult');
-    let stream = null;
-    let busy = false;
-    let ocrWorker = null;
-    let autoTimer = null;
-    let lastCandidate = '';
-    let repeatedCandidateCount = 0;
-    const autoBtn = document.getElementById('autoBtn');
-    const ocrDebug = document.getElementById('ocrDebug');
+    /* ======================= Constantes ======================= */
+    const CARD_W = 63, CARD_H = 88;           // proporção física de uma carta (mm)
+    const MIN_CARD_PX = 100;                  // largura mínima (px) para tentar ler o nome
+    const MAX_ATTEMPTS = 6;                   // tentativas de leitura por carta rastreada
+    const TRACK_GAP_S = 2.5;                  // segundos sem ver a carta até considerá-la fora da mesa
+    // Faixa do nome, em coordenadas relativas à carta (0–1). Variações cobrem pequenas imprecisões.
+    const STRIP_VARIANTS = [
+      { x0: .05, y0: .03,  x1: .76, y1: .12  },
+      { x0: .05, y0: .02,  x1: .76, y1: .105 },
+      { x0: .06, y0: .04,  x1: .74, y1: .13  }
+    ];
 
-    function setStatus(message, type='') {
-      statusEl.textContent = message;
-      statusEl.className = 'status ' + type;
+    const $ = id => document.getElementById(id);
+    const video = $('video'), overlay = $('overlay'), cameraBox = $('cameraBox'), placeholder = $('placeholder');
+    const statusEl = $('status'), resultEl = $('result'), emptyResult = $('emptyResult'), ocrDebug = $('ocrDebug');
+    const startBtn = $('startBtn'), stopBtn = $('stopBtn'), autoBtn = $('autoBtn'), scanBtn = $('scanBtn');
+    const analyzeBtn = $('analyzeBtn'), cancelBtn = $('cancelBtn'), progressEl = $('progress');
+
+    let mode = 'camera';          // 'camera' | 'file'
+    let stream = null, fileUrl = null, fileName = '';
+    let busy = false, liveOn = false, liveStart = 0, cancelAnalysis = false, analyzing = false;
+    let ocrWorker = null, cvReady = false;
+    let frameW = 1, frameH = 1;
+    let timeline = [];
+
+    function setStatus(message, type = '') { statusEl.textContent = message; statusEl.className = 'status ' + type; }
+    const fmtTime = t => { t = Math.max(0, Math.round(t)); return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); };
+
+    /* ======================= Geometria (funções puras) ======================= */
+    // Ordena 4 pontos no sentido horário começando pelo canto superior esquerdo.
+    function orderPts(pts) {
+      const cx = pts.reduce((s, p) => s + p.x, 0) / 4, cy = pts.reduce((s, p) => s + p.y, 0) / 4;
+      const sorted = pts.slice().sort((a, b) => Math.atan2(a.y - cy, a.x - cx) - Math.atan2(b.y - cy, b.x - cx));
+      let k = 0;
+      for (let i = 1; i < 4; i++) if (sorted[i].x + sorted[i].y < sorted[k].x + sorted[k].y) k = i;
+      return [0, 1, 2, 3].map(i => sorted[(k + i) % 4]);
     }
-
-    async function startCamera() {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setStatus('Este navegador não disponibilizou a câmera. Abra a aplicação em HTTPS ou localhost e verifique as permissões.', 'error');
-        return;
+    const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    // Larguras (topo/base) e alturas (esquerda/direita) médias do quadrilátero ordenado.
+    function quadSides(q) { return { a: (dist(q[0], q[1]) + dist(q[3], q[2])) / 2, b: (dist(q[0], q[3]) + dist(q[1], q[2])) / 2 }; }
+    function polyArea(q) { let s = 0; for (let i = 0; i < q.length; i++) { const p = q[i], n = q[(i + 1) % q.length]; s += p.x * n.y - n.x * p.y; } return Math.abs(s) / 2; }
+    function pointInPoly(pt, q) {
+      let inside = false;
+      for (let i = 0, j = q.length - 1; i < q.length; j = i++) {
+        if ((q[i].y > pt.y) !== (q[j].y > pt.y) && pt.x < (q[j].x - q[i].x) * (pt.y - q[i].y) / (q[j].y - q[i].y) + q[i].x) inside = !inside;
       }
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false
-        });
-        video.srcObject = stream;
-        video.style.display = 'block';
-        placeholder.style.display = 'none';
-        guide.style.display = 'block';
-        await video.play();
-        startBtn.disabled = true;
-        scanBtn.disabled = false;
-        stopBtn.disabled = false;
-        autoBtn.disabled = false;
-        setStatus('Câmera ativa. Encaixe a carta inteira na moldura (o nome deve ficar dentro do retângulo verde); você pode identificar uma vez ou iniciar a identificação contínua.', 'good');
-      } catch (err) {
-        setStatus('Não foi possível acessar a câmera. Verifique se ela está conectada, se outro programa a está usando e se você autorizou o acesso. Detalhe: ' + err.message, 'error');
+      return inside;
+    }
+    // Garante que os lados CURTOS fiquem em cima/embaixo (o nome da carta está sempre num lado curto).
+    function normalizeQuad(q) {
+      q = orderPts(q);
+      const { a, b } = quadSides(q);
+      if (a > b) q = [q[1], q[2], q[3], q[0]];
+      return q;
+    }
+    // Homografia do quadrado unitário (0,0)(1,0)(1,1)(0,1) para o quadrilátero q (tl,tr,br,bl).
+    function unitToQuad(q) {
+      const [p0, p1, p2, p3] = q;
+      const dx1 = p1.x - p2.x, dx2 = p3.x - p2.x, dx3 = p0.x - p1.x + p2.x - p3.x;
+      const dy1 = p1.y - p2.y, dy2 = p3.y - p2.y, dy3 = p0.y - p1.y + p2.y - p3.y;
+      let g = 0, h = 0;
+      if (Math.abs(dx3) > 1e-9 || Math.abs(dy3) > 1e-9) {
+        const det = dx1 * dy2 - dx2 * dy1;
+        g = (dx3 * dy2 - dx2 * dy3) / det;
+        h = (dx1 * dy3 - dx3 * dy1) / det;
       }
+      return [p1.x - p0.x + g * p1.x, p3.x - p0.x + h * p3.x, p0.x, p1.y - p0.y + g * p1.y, p3.y - p0.y + h * p3.y, p0.y, g, h];
     }
-
-    function stopCamera() {
-      stopAutoScan();
-      if (stream) stream.getTracks().forEach(track => track.stop());
-      stream = null;
-      video.srcObject = null;
-      video.style.display = 'none';
-      placeholder.style.display = 'block';
-      guide.style.display = 'none';
-      startBtn.disabled = false;
-      scanBtn.disabled = true;
-      stopBtn.disabled = true;
-      autoBtn.disabled = true;
-      setStatus('Câmera desligada.');
+    function bilinear(img, x, y) {
+      const { data, w, h } = img;
+      x -= 0.5; y -= 0.5;
+      const x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0;
+      const cx = v => Math.min(w - 1, Math.max(0, v)), cy = v => Math.min(h - 1, Math.max(0, v));
+      const i00 = data[cy(y0) * w + cx(x0)], i10 = data[cy(y0) * w + cx(x0 + 1)], i01 = data[cy(y0 + 1) * w + cx(x0)], i11 = data[cy(y0 + 1) * w + cx(x0 + 1)];
+      return (i00 * (1 - fx) + i10 * fx) * (1 - fy) + (i01 * (1 - fx) + i11 * fx) * fy;
     }
-
-    function captureFrame() {
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    // Retifica (corrige a perspectiva de) uma região da carta. rot180 lê a carta "de cabeça para baixo".
+    function sampleRegion(gray, quad, r, outW, rot180) {
+      const H = unitToQuad(quad), rw = r.x1 - r.x0, rh = r.y1 - r.y0;
+      const outH = Math.max(8, Math.round(outW * (rh * CARD_H) / (rw * CARD_W)));
+      const data = new Uint8ClampedArray(outW * outH);
+      for (let j = 0; j < outH; j++) for (let i = 0; i < outW; i++) {
+        let u = r.x0 + (i + .5) / outW * rw, v = r.y0 + (j + .5) / outH * rh;
+        if (rot180) { u = 1 - u; v = 1 - v; }
+        const d = H[6] * u + H[7] * v + 1;
+        data[j * outW + i] = bilinear(gray, (H[0] * u + H[1] * v + H[2]) / d, (H[3] * u + H[4] * v + H[5]) / d);
+      }
+      return { data, w: outW, h: outH };
+    }
+    function otsuThreshold(data) {
+      const hist = new Array(256).fill(0);
+      for (let i = 0; i < data.length; i++) hist[data[i] | 0]++;
+      let sum = 0; for (let i = 0; i < 256; i++) sum += i * hist[i];
+      let sumB = 0, wB = 0, best = -1, thr = 127;
+      for (let t = 0; t < 256; t++) {
+        wB += hist[t]; if (!wB) continue;
+        const wF = data.length - wB; if (!wF) break;
+        sumB += t * hist[t];
+        const mB = sumB / wB, mF = (sum - sumB) / wF, between = wB * wF * (mB - mF) * (mB - mF);
+        if (between > best) { best = between; thr = t; }
+      }
+      return thr;
+    }
+    // Binariza (texto preto em fundo branco), remove manchas coladas nas bordas do recorte
+    // (borda da carta, sombras) e adiciona margem branca. Devolve um canvas pronto para o OCR.
+    function binarizeStrip(img) {
+      const { data, w, h } = img, thr = otsuThreshold(data);
+      let dark = 0; for (let i = 0; i < data.length; i++) if (data[i] <= thr) dark++;
+      const invert = dark > data.length * 0.5;
+      const ink = new Uint8Array(w * h);
+      for (let i = 0; i < data.length; i++) ink[i] = (invert ? data[i] > thr : data[i] <= thr) ? 1 : 0;
+      const stack = [];
+      const seed = (x, y) => { const k = y * w + x; if (ink[k] === 1) { ink[k] = 2; stack.push(k); } };
+      for (let x = 0; x < w; x++) { seed(x, 0); seed(x, h - 1); }
+      for (let y = 0; y < h; y++) { seed(0, y); seed(w - 1, y); }
+      while (stack.length) {
+        const k = stack.pop(), x = k % w, y = (k / w) | 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx, ny = y + dy;
+          if (nx >= 0 && ny >= 0 && nx < w && ny < h) seed(nx, ny);
+        }
+      }
+      const pad = 24, canvas = document.createElement('canvas');
+      canvas.width = w + pad * 2; canvas.height = h + pad * 2;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const out = ctx.getImageData(pad, pad, w, h);
+      for (let i = 0; i < ink.length; i++) { const v = ink[i] === 1 ? 0 : 255; out.data[i * 4] = out.data[i * 4 + 1] = out.data[i * 4 + 2] = v; out.data[i * 4 + 3] = 255; }
+      ctx.putImageData(out, pad, pad);
       return canvas;
     }
-
-    // Retângulo da moldura (guia) convertido para pixels reais do vídeo.
-    // Leva em conta o object-fit: cover, que corta as bordas da imagem na prévia.
-    function getGuideRectInVideo(source) {
-      const vbox = video.getBoundingClientRect();
-      const gbox = guide.getBoundingClientRect();
-      const scale = Math.max(vbox.width / source.width, vbox.height / source.height);
-      const visibleW = vbox.width / scale;
-      const visibleH = vbox.height / scale;
-      const offsetX = (source.width - visibleW) / 2;
-      const offsetY = (source.height - visibleH) / 2;
-      return {
-        x: offsetX + (gbox.left - vbox.left) / scale,
-        y: offsetY + (gbox.top - vbox.top) / scale,
-        w: gbox.width / scale,
-        h: gbox.height / scale
-      };
+    function grayToCanvas(img) {
+      const c = document.createElement('canvas'); c.width = img.w; c.height = img.h;
+      const ctx = c.getContext('2d'), id = ctx.createImageData(img.w, img.h);
+      for (let i = 0; i < img.data.length; i++) { id.data[i * 4] = id.data[i * 4 + 1] = id.data[i * 4 + 2] = img.data[i]; id.data[i * 4 + 3] = 255; }
+      ctx.putImageData(id, 0, 0); return c;
     }
+    function toGray(canvas) {
+      const w = canvas.width, h = canvas.height;
+      const px = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+      const g = new Uint8ClampedArray(w * h);
+      for (let i = 0, p = 0; p < g.length; i += 4, p++) g[p] = (px[i] * 299 + px[i + 1] * 587 + px[i + 2] * 114) / 1000;
+      return { data: g, w, h };
+    }
+    // Assinatura visual pequena da carta (para perceber que outra carta foi colocada no mesmo lugar).
+    function signature(gray, quad, rot) {
+      const s = sampleRegion(gray, quad, { x0: 0, y0: 0, x1: 1, y1: 1 }, 24, rot).data;
+      let m = 0; for (const v of s) m += v; m /= s.length;
+      const z = Float32Array.from(s, v => v - m);
+      let n = 0; for (const v of z) n += v * v;
+      return { z, n: Math.sqrt(n) || 1 };
+    }
+    function correlation(a, b) { let d = 0; for (let i = 0; i < a.z.length; i++) d += a.z[i] * b.z[i]; return d / (a.n * b.n); }
 
-    // Limiar de Otsu: separa texto e fundo automaticamente, sem depender de um valor fixo.
-    function otsuThreshold(gray) {
-      const hist = new Array(256).fill(0);
-      for (let i = 0; i < gray.length; i++) hist[gray[i]]++;
-      const total = gray.length;
-      let sum = 0;
-      for (let i = 0; i < 256; i++) sum += i * hist[i];
-      let sumB = 0, wB = 0, best = 0, threshold = 127;
-      for (let t = 0; t < 256; t++) {
-        wB += hist[t];
-        if (!wB) continue;
-        const wF = total - wB;
-        if (!wF) break;
-        sumB += t * hist[t];
-        const mB = sumB / wB, mF = (sum - sumB) / wF;
-        const between = wB * wF * (mB - mF) * (mB - mF);
-        if (between > best) { best = between; threshold = t; }
+    /* ======================= Detecção de cartas (OpenCV.js) ======================= */
+    // Procura quadriláteros com proporção de carta em QUALQUER lugar do quadro.
+    function detectCards(srcCanvas) {
+      const maxDim = 960, s = Math.min(1, maxDim / Math.max(srcCanvas.width, srcCanvas.height));
+      const small = document.createElement('canvas');
+      small.width = Math.max(1, Math.round(srcCanvas.width * s)); small.height = Math.max(1, Math.round(srcCanvas.height * s));
+      small.getContext('2d').drawImage(srcCanvas, 0, 0, small.width, small.height);
+      const garbage = [], keep = m => (garbage.push(m), m);
+      const found = [];
+      try {
+        const src = keep(cv.imread(small)), gray = keep(new cv.Mat());
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+        cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0);
+        const hist = new Array(256).fill(0); for (const v of gray.data) hist[v]++;
+        let acc = 0, med = 0; for (let i = 0; i < 256; i++) { acc += hist[i]; if (acc >= gray.data.length / 2) { med = i; break; } }
+        const lo = Math.max(10, Math.floor(0.33 * med)), hi = Math.min(255, Math.max(60, Math.floor(1.064 * med)));
+        const edges = keep(new cv.Mat()); cv.Canny(gray, edges, lo, hi);
+        const kernel = keep(cv.Mat.ones(3, 3, cv.CV_8U));
+        cv.dilate(edges, edges, kernel, new cv.Point(-1, -1), 1);
+        const contours = keep(new cv.MatVector()), hier = keep(new cv.Mat());
+        cv.findContours(edges, contours, hier, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+        const minArea = small.width * small.height * 0.004;
+        for (let i = 0; i < contours.size(); i++) {
+          const cnt = contours.get(i);
+          try {
+            if (cv.contourArea(cnt) < minArea) continue;
+            const hull = new cv.Mat(), ap = new cv.Mat();
+            try {
+              cv.convexHull(cnt, hull, false, true);
+              const hullArea = cv.contourArea(hull);
+              cv.approxPolyDP(hull, ap, 0.03 * cv.arcLength(hull, true), true);
+              let pts;
+              if (ap.rows === 4) {
+                pts = [0, 1, 2, 3].map(k => ({ x: ap.data32S[k * 2], y: ap.data32S[k * 2 + 1] }));
+              } else {
+                const rect = cv.minAreaRect(hull);
+                if (hullArea / Math.max(1, rect.size.width * rect.size.height) < 0.9) continue;
+                pts = cv.RotatedRect.points(rect).map(p => ({ x: p.x, y: p.y }));
+              }
+              const q = orderPts(pts), { a, b } = quadSides(q);
+              if (Math.min(a, b) < 8) continue;
+              const ratio = Math.min(a, b) / Math.max(a, b);
+              if (ratio < 0.60 || ratio > 0.82) continue;
+              const qa = polyArea(q), solid = hullArea / Math.max(1, qa);
+              if (solid > 1.12 || solid < 0.85) continue;
+              found.push({ quad: q.map(p => ({ x: p.x / s, y: p.y / s })), area: qa / s / s });
+            } finally { hull.delete(); ap.delete(); }
+          } finally { cnt.delete(); }
+        }
+      } finally { garbage.forEach(m => m.delete()); }
+      // Mantém as maiores e descarta retângulos dentro de uma carta já aceita (caixa de arte, de texto…).
+      found.sort((p, q) => q.area - p.area);
+      const kept = [];
+      for (const d of found) {
+        const c = { x: d.quad.reduce((t, p) => t + p.x, 0) / 4, y: d.quad.reduce((t, p) => t + p.y, 0) / 4 };
+        if (kept.some(k => pointInPoly(c, k.quad))) continue;
+        kept.push(d);
       }
-      return threshold;
+      return kept.map(d => describeCard(d.quad));
+    }
+    // Normaliza o quadrilátero e calcula centro, tamanho e ângulo do eixo maior (para rastrear e detectar giros).
+    function describeCard(rawQuad) {
+      const quad = normalizeQuad(rawQuad), { a, b } = quadSides(quad);
+      const long = b > a ? [quad[0], quad[3]] : [quad[0], quad[1]];
+      const angle = ((Math.atan2(long[1].y - long[0].y, long[1].x - long[0].x) * 180 / Math.PI) % 180 + 180) % 180;
+      return { quad, cx: quad.reduce((t, p) => t + p.x, 0) / 4, cy: quad.reduce((t, p) => t + p.y, 0) / 4, size: Math.max(a, b), minSide: Math.min(a, b), angle };
     }
 
-    // Recorta a faixa do nome (topo da carta, à esquerda do custo de mana) e a prepara
-    // para o OCR: escala de cinza, binarização (Otsu), texto preto em fundo branco e margem.
-    function makeTitleCrops(source) {
-      const g = getGuideRectInVideo(source);
-      // Posições relativas à CARTA (não ao quadro): o nome fica nos ~3%–11% superiores.
-      const regions = [
-        { x: 0.04, y: 0.035, w: 0.72, h: 0.075, label: 'nome padrão' },
-        { x: 0.04, y: 0.025, w: 0.72, h: 0.095, label: 'nome folgado' },
-        { x: 0.03, y: 0.045, w: 0.74, h: 0.075, label: 'nome mais baixo' },
-        { x: 0.04, y: 0.015, w: 0.72, h: 0.075, label: 'nome mais alto' }
-      ];
-      return regions.map(region => {
-        const sx = Math.max(0, Math.round(g.x + g.w * region.x));
-        const sy = Math.max(0, Math.round(g.y + g.h * region.y));
-        const sw = Math.max(8, Math.min(source.width - sx, Math.round(g.w * region.w)));
-        const sh = Math.max(8, Math.min(source.height - sy, Math.round(g.h * region.h)));
-        const scale = Math.max(1, Math.min(4, 1600 / sw));
-        const pad = 24;
-        const cw = Math.round(sw * scale), ch = Math.round(sh * scale);
-        const crop = document.createElement('canvas');
-        crop.width = cw + pad * 2;
-        crop.height = ch + pad * 2;
-        const ctx = crop.getContext('2d', { willReadFrequently: true });
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(0, 0, crop.width, crop.height);
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(source, sx, sy, sw, sh, pad, pad, cw, ch);
-
-        const image = ctx.getImageData(pad, pad, cw, ch);
-        const gray = new Uint8Array(cw * ch);
-        for (let i = 0, p = 0; i < image.data.length; i += 4, p++) {
-          gray[p] = image.data[i] * 0.299 + image.data[i+1] * 0.587 + image.data[i+2] * 0.114;
-        }
-        const t = otsuThreshold(gray);
-        // Se a maioria dos pixels ficar escura, o texto é claro sobre fundo escuro: inverte.
-        let dark = 0;
-        for (let p = 0; p < gray.length; p++) if (gray[p] <= t) dark++;
-        const invert = dark > gray.length * 0.5;
-        for (let i = 0, p = 0; i < image.data.length; i += 4, p++) {
-          const isInk = invert ? gray[p] > t : gray[p] <= t;
-          const v = isInk ? 0 : 255;
-          image.data[i] = image.data[i+1] = image.data[i+2] = v;
-          image.data[i+3] = 255;
-        }
-        ctx.putImageData(image, pad, pad);
-        crop.dataset.region = region.label;
-        return crop;
-      });
+    /* ======================= Rastreamento entre quadros ======================= */
+    const angDiff = (a, b) => { const d = Math.abs(a - b) % 180; return Math.min(d, 180 - d); };
+    class Track {
+      constructor(id, det, t) {
+        this.id = id; this.firstSeen = t; this.lastSeen = t; this.hits = 1; this.closed = false;
+        this.attempts = 0; this.votes = {}; this.identity = null; this.sig = null; this.rot = false; this.mismatch = 0;
+        this.stable = 0; this.restX = det.cx; this.restY = det.cy; this.restAngle = det.angle; this.note = '';
+        this.apply(det);
+      }
+      apply(det) { Object.assign(this, { quad: det.quad, cx: det.cx, cy: det.cy, size: det.size, minSide: det.minSide, angle: det.angle }); }
     }
+    class Tracker {
+      constructor() { this.tracks = []; this.nextId = 1; }
+      update(dets, t) {
+        const pairs = [];
+        dets.forEach((d, di) => this.tracks.forEach((tr, ti) => {
+          if (tr.closed) return;
+          const dd = Math.hypot(d.cx - tr.cx, d.cy - tr.cy);
+          if (dd < 0.7 * Math.max(d.size, tr.size)) pairs.push({ di, ti, dd });
+        }));
+        pairs.sort((p, q) => p.dd - q.dd);
+        const dUsed = new Set(), tUsed = new Set(), seen = [];
+        for (const p of pairs) {
+          if (dUsed.has(p.di) || tUsed.has(p.ti)) continue;
+          dUsed.add(p.di); tUsed.add(p.ti);
+          const tr = this.tracks[p.ti], d = dets[p.di];
+          tr.stable = Math.hypot(d.cx - tr.cx, d.cy - tr.cy) < 0.25 * d.size ? tr.stable + 1 : 0;
+          tr.apply(d); tr.lastSeen = t; tr.hits++; seen.push(tr);
+        }
+        dets.forEach((d, di) => { if (!dUsed.has(di)) { const tr = new Track(this.nextId++, d, t); this.tracks.push(tr); seen.push(tr); } });
+        const closed = [];
+        for (const tr of this.tracks) if (!tr.closed && t - tr.lastSeen > TRACK_GAP_S) { tr.closed = true; closed.push(tr); }
+        return { seen, closed };
+      }
+      // A carta no mesmo lugar mudou: encerra a faixa antiga e abre outra.
+      replace(tr, t) {
+        tr.closed = true;
+        const nt = new Track(this.nextId++, tr, t); this.tracks.push(nt); return nt;
+      }
+    }
+    let tracker = new Tracker();
 
+    /* ======================= OCR + catálogo (Scryfall) ======================= */
     async function getOcrWorker() {
       if (!window.Tesseract) throw new Error('O OCR não carregou. Verifique a internet e recarregue a página.');
       if (!ocrWorker) {
@@ -285,205 +451,372 @@
         ocrWorker = await Tesseract.createWorker('eng');
         await ocrWorker.setParameters({
           tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE,
-          preserve_interword_spaces: '1'
+          preserve_interword_spaces: '1',
+          tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'’,-: /"
         });
       }
       return ocrWorker;
     }
-
     function cleanCandidate(value) {
-      return (value || '')
-        .replace(/[|!¡]/g, 'I')
-        .replace(/[“”]/g, '"')
-        .replace(/[^A-Za-zÀ-ÿ0-9'’:, -]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .replace(/^[^A-Za-zÀ-ÿ0-9]+|[^A-Za-zÀ-ÿ0-9]+$/g, '')
-        .trim();
+      return (value || '').replace(/[|!¡]/g, 'I').replace(/[^A-Za-zÀ-ÿ0-9'’:, \/-]/g, ' ').replace(/\s+/g, ' ')
+        .replace(/^[^A-Za-zÀ-ÿ0-9]+|[^A-Za-zÀ-ÿ0-9]+$/g, '').trim();
     }
-
-    async function recognizeCandidates() {
-      const frame = captureFrame();
-      const worker = await getOcrWorker();
-      const crops = makeTitleCrops(frame);
-      const reads = [];
-
-      // Nomes de cartas usam normalmente uma única linha. Testamos SINGLE_LINE e
-      // SPARSE_TEXT em cada recorte para lidar melhor com fontes e fundos diferentes.
-      for (const crop of crops) {
-        await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE, preserve_interword_spaces: '1' });
-        const single = await worker.recognize(crop);
-        reads.push({ text: cleanCandidate(single.data.text), confidence: single.data.confidence || 0, region: crop.dataset.region, mode: 'linha' });
-
-        await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT, preserve_interword_spaces: '1' });
-        const sparse = await worker.recognize(crop);
-        reads.push({ text: cleanCandidate(sparse.data.text), confidence: sparse.data.confidence || 0, region: crop.dataset.region, mode: 'texto esparso' });
-      }
-
-      await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE, preserve_interword_spaces: '1' });
-
-      // Mostra no diagnóstico exatamente o que o OCR "enxergou" (útil para ajustar a posição da carta).
-      let preview = document.getElementById('cropPreview');
-      if (!preview) {
-        preview = document.createElement('div');
-        preview.id = 'cropPreview';
-        preview.style.cssText = 'display:grid;gap:6px;margin-top:10px';
-        ocrDebug.parentElement.appendChild(preview);
-      }
-      preview.textContent = '';
-      for (const crop of crops) {
-        const img = document.createElement('canvas');
-        img.width = crop.width; img.height = crop.height;
-        img.getContext('2d').drawImage(crop, 0, 0);
-        img.style.cssText = 'width:100%;max-width:420px;border:1px solid #36414c;background:#fff';
-        img.title = crop.dataset.region;
-        preview.appendChild(img);
-      }
-
-      reads.sort((a, b) => (b.confidence + Math.min(b.text.length, 24)) - (a.confidence + Math.min(a.text.length, 24)));
-      const topReads = reads.filter(r => r.text.length >= 3).slice(0, 8);
-      ocrDebug.textContent = topReads.length
-        ? topReads.map((r, i) => (i + 1) + '. ' + r.region + ' [' + r.mode + ']: ' + r.text + ' — confiança ' + Math.round(r.confidence) + '%').join('\n')
-        : '(nenhum texto legível nos recortes abaixo — ajuste a posição da carta)';
-
-      const lines = reads.map(r => r.text).filter(line => line.length >= 3 && line.length <= 70);
-      const unique = [];
-      for (const line of lines) if (!unique.some(x => x.toLowerCase() === line.toLowerCase())) unique.push(line);
-      return unique.slice(0, 10);
-    }
-
-    async function identifyFromCamera() {
-      if (!video.videoWidth || busy) return;
-      busy = true;
-      scanBtn.disabled = true;
-      try {
-        setStatus('Lendo a faixa do nome da carta…');
-        const candidates = await recognizeCandidates();
-        if (!candidates.length) throw new Error('Não consegui ler o nome. Centralize a carta, aproxime um pouco e evite reflexos.');
-        setStatus('Texto detectado: "' + candidates[0] + '". Conferindo no catálogo…');
-        let found = false;
-        for (const candidate of candidates) {
-          try {
-            const card = await fetchCard(candidate, true);
-            // A API fuzzy pode retornar uma carta incorreta; exigir alguma semelhança no nome.
-            const wanted = normalizeName(candidate);
-            const returned = normalizeName(card.name || '');
-            if (wanted.length >= 4 && (returned.includes(wanted) || wanted.includes(returned) || nameSimilarity(wanted, returned) >= 0.55)) {
-              showCard(card);
-              setStatus('Possível correspondência: ' + (card.printed_name || card.name) + '. Confira a imagem com a carta física.', 'good');
-              found = true;
-              break;
-            }
-          } catch (_) {}
-        }
-        if (!found) {
-          document.getElementById('manualName').value = candidates[0];
-          throw new Error('O texto foi lido, mas não encontrei uma correspondência confiável. Veja o diagnóstico abaixo e tente novamente com a carta mais centralizada.');
-        }
-      } catch (err) {
-        setStatus(err.message || 'Ocorreu um erro durante a identificação.', 'error');
-      } finally {
-        busy = false;
-        scanBtn.disabled = !stream;
-      }
-    }
-
-    function normalizeName(value) {
-      return (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    }
-
+    const normalizeName = v => (v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
     function nameSimilarity(a, b) {
       if (!a || !b) return 0;
-      const rows = Array.from({length: a.length + 1}, (_, i) => [i]);
+      const rows = Array.from({ length: a.length + 1 }, (_, i) => [i]);
       for (let j = 0; j <= b.length; j++) rows[0][j] = j;
-      for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
-        rows[i][j] = Math.min(rows[i-1][j] + 1, rows[i][j-1] + 1, rows[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1));
-      }
+      for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+        rows[i][j] = Math.min(rows[i - 1][j] + 1, rows[i][j - 1] + 1, rows[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
       return 1 - rows[a.length][b.length] / Math.max(a.length, b.length);
     }
-
-    function startAutoScan() {
-      if (autoTimer) { stopAutoScan(); return; }
-      autoBtn.textContent = 'Parar identificação contínua';
-      scanBtn.disabled = true;
-      setStatus('Identificação contínua ativa. Mantenha a carta parada por alguns instantes.');
-      autoTimer = setInterval(async () => {
-        if (busy || !stream) return;
-        await identifyFromCamera();
-      }, 2200);
-      // Faz uma tentativa imediata.
-      identifyFromCamera();
+    let lastRequest = Promise.resolve();
+    const cardCache = new Map();
+    async function throttledFetch(url) {
+      const run = async () => {
+        await new Promise(r => setTimeout(r, 110));          // a Scryfall pede ~10 req/s no máximo
+        let res = await fetch(url);
+        if (res.status === 429) { await new Promise(r => setTimeout(r, 1200)); res = await fetch(url); }
+        return res;
+      };
+      const p = lastRequest.then(run, run); lastRequest = p.catch(() => {}); return p;
     }
-
-    function stopAutoScan() {
-      if (autoTimer) clearInterval(autoTimer);
-      autoTimer = null;
-      autoBtn.textContent = 'Iniciar identificação contínua';
-      scanBtn.disabled = !stream || busy;
-    }
-
-    async function fetchCard(name, fuzzy=false) {
-      const endpoint = fuzzy
-        ? 'https://api.scryfall.com/cards/named?fuzzy=' + encodeURIComponent(name)
-        : 'https://api.scryfall.com/cards/named?exact=' + encodeURIComponent(name);
-      const response = await fetch(endpoint);
-      if (!response.ok) {
-        if (response.status === 404) throw new Error('A Scryfall não encontrou uma carta com esse nome.');
-        throw new Error('A consulta à Scryfall falhou (HTTP ' + response.status + '). Tente novamente.');
+    async function fetchCard(name, fuzzy = false) {
+      const res = await throttledFetch('https://api.scryfall.com/cards/named?' + (fuzzy ? 'fuzzy=' : 'exact=') + encodeURIComponent(name));
+      if (!res.ok) {
+        if (res.status === 404) throw new Error('A Scryfall não encontrou uma carta com esse nome.');
+        throw new Error('A consulta à Scryfall falhou (HTTP ' + res.status + '). Tente novamente.');
       }
-      return response.json();
+      return res.json();
+    }
+    // Procura o texto lido no catálogo; devolve { card, sim } ou null. Resultados ficam em cache.
+    async function matchCandidate(text) {
+      const wanted = normalizeName(text);
+      if (wanted.length < 4) return null;
+      if (!cardCache.has(wanted)) {
+        cardCache.set(wanted, (async () => {
+          try {
+            const card = await fetchCard(text, true);
+            const names = [card.name, card.name.split('//')[0], card.printed_name].filter(Boolean).map(normalizeName);
+            return { card, sim: Math.max(...names.map(n => nameSimilarity(wanted, n))) };
+          } catch (_) { return null; }
+        })());
+      }
+      return cardCache.get(wanted);
     }
 
-    async function searchManual() {
-      const name = document.getElementById('manualName').value.trim();
-      if (!name) {
-        setStatus('Digite o nome de uma carta para pesquisar.', 'error');
-        return;
+    /* ======================= Identificação e eventos ======================= */
+    const zoneOf = (x, y) => {
+      const v = y / frameH < 1 / 3 ? 'topo' : y / frameH < 2 / 3 ? 'meio' : 'base';
+      const h = x / frameW < 1 / 3 ? 'esquerda' : x / frameW < 2 / 3 ? 'centro' : 'direita';
+      return v === 'meio' && h === 'centro' ? 'centro' : v + ' ' + h;
+    };
+    function addEvent(t, type, tr, card) {
+      timeline.push({ t, type, trackId: tr.id, card: card || tr.identity, x: tr.cx / frameW, y: tr.cy / frameH, zone: zoneOf(tr.cx, tr.cy) });
+      renderTimeline();
+    }
+    let debugItems = [];
+    async function identifyTrack(tr, gray, t) {
+      const worker = await getOcrWorker();
+      const variant = STRIP_VARIANTS[(tr.attempts - 1) % STRIP_VARIANTS.length];
+      let best = null;
+      const item = { id: tr.id, thumb: grayToCanvas(sampleRegion(gray, tr.quad, { x0: 0, y0: 0, x1: 1, y1: 1 }, 120, false)), reads: [] };
+      debugItems.push(item);
+      for (const rot of [false, true]) {          // normal e de cabeça para baixo
+        const strip = binarizeStrip(sampleRegion(gray, tr.quad, variant, 640, rot));
+        const res = await worker.recognize(strip);
+        const text = cleanCandidate(res.data.text);
+        item.reads.push({ rot, text, strip });
+        if (text.length < 3) continue;
+        const m = await matchCandidate(text);
+        if (m && (!best || m.sim > best.sim)) best = { card: m.card, sim: m.sim, text, rot };
+        if (best && best.sim >= 0.85) break;
       }
-      document.getElementById('searchBtn').disabled = true;
-      setStatus('Consultando a Scryfall…');
+      if (best) item.result = best.card.name + ' (' + Math.round(best.sim * 100) + '%)';
+      if (!best || best.sim < 0.72) return;
+      const key = best.card.oracle_id || best.card.id;
+      const v = tr.votes[key] || (tr.votes[key] = { n: 0, card: best.card });
+      v.n++;
+      if (best.sim >= 0.85 || v.n >= 2) {
+        tr.identity = v.card; tr.rot = best.rot; tr.sig = signature(gray, tr.quad, best.rot); tr.mismatch = 0;
+        addEvent(tr.firstSeen, 'apareceu', tr);
+        showCard(tr.identity);
+        setStatus('Identificada: ' + (tr.identity.printed_name || tr.identity.name) + '. Confira a imagem com a carta física.', 'good');
+      }
+    }
+    // Eventos de uma carta já identificada: troca de carta, movimento e giro de 90°.
+    function trackEvents(tr, gray, t) {
+      const same = Math.max(correlation(tr.sig, signature(gray, tr.quad, false)), correlation(tr.sig, signature(gray, tr.quad, true)));
+      tr.mismatch = same < 0.45 ? tr.mismatch + 1 : 0;
+      if (tr.mismatch >= 2) return 'replaced';
+      if (tr.stable >= 1) {
+        if (angDiff(tr.angle, tr.restAngle) > 60) {
+          addEvent(t, 'girou', tr); tr.restAngle = tr.angle;
+        }
+        if (Math.hypot(tr.cx - tr.restX, tr.cy - tr.restY) > 0.9 * tr.size) {
+          addEvent(t, 'moveu', tr); tr.restX = tr.cx; tr.restY = tr.cy;
+        }
+      }
+      return null;
+    }
+    function closeEvent(tr) {
+      if (tr.identity && tr.hits >= 2) addEvent(tr.lastSeen, 'sumiu', tr);
+    }
+
+    function captureFrame() {
+      const vw = video.videoWidth, vh = video.videoHeight;
+      if (!vw || !vh) return null;
+      const s = Math.min(1, 2560 / Math.max(vw, vh));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(vw * s); canvas.height = Math.round(vh * s);
+      canvas.getContext('2d', { willReadFrequently: true }).drawImage(video, 0, 0, canvas.width, canvas.height);
+      return canvas;
+    }
+
+    async function processFrame(canvas, t) {
+      if (!cvReady) throw new Error('O detector de cartas ainda não carregou (OpenCV). Aguarde alguns segundos.');
+      frameW = canvas.width; frameH = canvas.height;
+      const gray = toGray(canvas);
+      const dets = detectCards(canvas);
+      let { seen, closed } = tracker.update(dets, t);
+      debugItems = [];
+      let small = 0;
+      const current = [];
+      for (let tr of seen) {
+        if (tr.identity) {
+          if (trackEvents(tr, gray, t) === 'replaced') { closeEvent(tr); tr = tracker.replace(tr, t); }
+          else { current.push(tr); continue; }
+        }
+        current.push(tr);
+        if (tr.minSide < MIN_CARD_PX) { small++; continue; }
+        if (tr.attempts >= MAX_ATTEMPTS) continue;
+        tr.attempts++;
+        await identifyTrack(tr, gray, t);
+      }
+      closed.forEach(closeEvent);
+      drawOverlay(current);
+      renderDebug();
+      const known = current.filter(tr => tr.identity).length;
+      if (!analyzing) {
+        setStatus(dets.length ? dets.length + ' carta(s) no quadro, ' + known + ' identificada(s)' + (small ? ', ' + small + ' pequena(s) demais para ler' : '') + '.' : 'Nenhuma carta encontrada neste quadro. Aproxime a câmera ou melhore a iluminação.', dets.length ? 'good' : 'error');
+      }
+    }
+
+    /* ======================= Interface: desenho, diagnóstico, linha do tempo ======================= */
+    function drawOverlay(tracks) {
+      const box = cameraBox.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+      overlay.width = Math.round(box.width * dpr); overlay.height = Math.round(box.height * dpr);
+      const ctx = overlay.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, box.width, box.height);
+      if (!tracks || !tracks.length) return;
+      const sc = Math.min(box.width / frameW, box.height / frameH), ox = (box.width - frameW * sc) / 2, oy = (box.height - frameH * sc) / 2;
+      ctx.lineWidth = 3; ctx.font = '700 13px system-ui, sans-serif';
+      for (const tr of tracks) {
+        const color = tr.identity ? '#a9e34b' : tr.minSide < MIN_CARD_PX ? '#868e96' : '#ffd43b';
+        ctx.strokeStyle = color; ctx.beginPath();
+        tr.quad.forEach((p, i) => { const X = ox + p.x * sc, Y = oy + p.y * sc; i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); });
+        ctx.closePath(); ctx.stroke();
+        const label = tr.identity ? (tr.identity.printed_name || tr.identity.name) : tr.minSide < MIN_CARD_PX ? 'pequena demais' : 'lendo…';
+        const lx = ox + tr.quad[0].x * sc, ly = oy + tr.quad[0].y * sc - 6, tw = ctx.measureText(label).width + 8;
+        ctx.fillStyle = '#000b'; ctx.fillRect(lx, ly - 14, tw, 18);
+        ctx.fillStyle = color; ctx.fillText(label, lx + 4, ly);
+      }
+    }
+    function clearOverlay() { overlay.getContext('2d').clearRect(0, 0, overlay.width, overlay.height); }
+    function renderDebug() {
+      ocrDebug.textContent = '';
+      if (!debugItems.length) { ocrDebug.textContent = 'Nenhuma leitura neste quadro (cartas já identificadas não são lidas de novo).'; return; }
+      const wrap = document.createElement('div'); wrap.className = 'dbg';
+      for (const it of debugItems.slice(0, 8)) {
+        const fig = document.createElement('figure'), cap = document.createElement('figcaption');
+        fig.appendChild(it.thumb);
+        for (const r of it.reads) { const c = document.createElement('canvas'); c.width = r.strip.width; c.height = r.strip.height; c.getContext('2d').drawImage(r.strip, 0, 0); c.title = r.rot ? 'de cabeça para baixo' : 'normal'; fig.appendChild(c); }
+        cap.textContent = 'Carta #' + it.id + ' · ' + it.reads.map(r => (r.rot ? '180°: ' : '0°: ') + (r.text || '—')).join(' | ') + (it.result ? ' → ' + it.result : '');
+        fig.appendChild(cap); wrap.appendChild(fig);
+      }
+      ocrDebug.appendChild(wrap);
+    }
+    const EVENT_LABEL = { apareceu: 'apareceu', moveu: 'mudou de lugar', girou: 'girou 90°', sumiu: 'saiu da mesa' };
+    function renderTimeline() {
+      const list = $('timeline');
+      const sorted = timeline.map((e, i) => ({ e, i })).sort((a, b) => a.e.t - b.e.t || a.i - b.i);
+      list.textContent = '';
+      for (const { e } of sorted) {
+        const li = document.createElement('li');
+        const t = document.createElement('span'); t.className = 't'; t.textContent = fmtTime(e.t);
+        const b = document.createElement('span'); b.className = 'badge ' + e.type; b.textContent = EVENT_LABEL[e.type];
+        const n = document.createElement('span'); n.textContent = e.card.printed_name || e.card.name;
+        const z = document.createElement('span'); z.className = 'zone'; z.textContent = e.zone;
+        li.append(t, b, n, z); li.addEventListener('click', () => showCard(e.card));
+        list.appendChild(li);
+      }
+      const has = timeline.length > 0;
+      list.hidden = !has; $('tlEmpty').hidden = has;
+      ['exportJson', 'exportCsv', 'clearTl'].forEach(id => $(id).disabled = !has);
+      const names = new Set(timeline.map(e => e.card.oracle_id || e.card.id));
+      $('tlSummary').textContent = has ? timeline.length + ' evento(s) · ' + names.size + ' carta(s) diferente(s).' : '';
+      list.scrollTop = list.scrollHeight;
+    }
+    function download(name, text, type) {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    }
+    const sortedEvents = () => timeline.slice().sort((a, b) => a.t - b.t);
+    $('exportJson').addEventListener('click', () => download('partida.json', JSON.stringify({ video: fileName || null, gerado_em: new Date().toISOString(), eventos: sortedEvents().map(e => ({ tempo_s: +e.t.toFixed(2), tempo: fmtTime(e.t), evento: e.type, carta: e.card.name, oracle_id: e.card.oracle_id, scryfall_id: e.card.id, zona: e.zone, posicao: { x: +e.x.toFixed(3), y: +e.y.toFixed(3) }, faixa: e.trackId })) }, null, 2), 'application/json'));
+    $('exportCsv').addEventListener('click', () => download('partida.csv', 'tempo_s,tempo,evento,carta,zona,x,y,faixa\n' + sortedEvents().map(e => [e.t.toFixed(2), fmtTime(e.t), e.type, '"' + e.card.name.replace(/"/g, '""') + '"', e.zone, e.x.toFixed(3), e.y.toFixed(3), e.trackId].join(',')).join('\n'), 'text/csv'));
+    $('clearTl').addEventListener('click', () => { timeline = []; tracker = new Tracker(); renderTimeline(); clearOverlay(); setStatus('Linha do tempo limpa.'); });
+
+    /* ======================= Câmera ao vivo ======================= */
+    async function startCamera() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { setStatus('Este navegador não disponibilizou a câmera. Abra a aplicação em HTTPS ou localhost e verifique as permissões.', 'error'); return; }
       try {
-        const card = await fetchCard(name, false);
-        showCard(card);
-        setStatus('Carta encontrada.', 'good');
-      } catch (err) {
-        setStatus(err.message, 'error');
-      } finally {
-        document.getElementById('searchBtn').disabled = false;
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+        video.srcObject = stream; video.controls = false; video.style.display = 'block'; placeholder.style.display = 'none';
+        await video.play();
+        liveStart = performance.now(); timeline = []; tracker = new Tracker(); renderTimeline();
+        startBtn.disabled = true; scanBtn.disabled = false; stopBtn.disabled = false; autoBtn.disabled = false;
+        setStatus('Câmera ativa. Mostre as cartas em qualquer parte do quadro e use “Identificar quadro atual” ou a identificação contínua.', 'good');
+      } catch (err) { setStatus('Não foi possível acessar a câmera. Verifique permissões e se outro programa a está usando. Detalhe: ' + err.message, 'error'); }
+    }
+    function stopCamera() {
+      stopLive();
+      if (stream) stream.getTracks().forEach(tk => tk.stop());
+      stream = null; video.srcObject = null; video.style.display = 'none'; placeholder.style.display = 'block'; clearOverlay();
+      startBtn.disabled = false; scanBtn.disabled = true; stopBtn.disabled = true; autoBtn.disabled = true;
+      setStatus('Câmera desligada.');
+    }
+    function stopLive() { liveOn = false; autoBtn.textContent = 'Identificação contínua'; }
+    async function liveLoop() {
+      while (liveOn && stream) {
+        await scanCurrent((performance.now() - liveStart) / 1000);
+        await new Promise(r => setTimeout(r, 400));
       }
     }
+    function toggleLive() {
+      if (liveOn) { stopLive(); return; }
+      liveOn = true; autoBtn.textContent = 'Parar identificação contínua'; liveLoop();
+    }
+    async function scanCurrent(t) {
+      if (busy) return;
+      const canvas = captureFrame(); if (!canvas) return;
+      busy = true; scanBtn.disabled = true;
+      try { await processFrame(canvas, t !== undefined ? t : (mode === 'file' ? video.currentTime : (performance.now() - (liveStart || performance.now())) / 1000)); }
+      catch (err) { setStatus(err.message || 'Ocorreu um erro durante a identificação.', 'error'); }
+      finally { busy = false; scanBtn.disabled = !(stream || fileUrl); }
+    }
 
+    /* ======================= Vídeo gravado ======================= */
+    function loadFile(file) {
+      if (!file) return;
+      if (fileUrl) URL.revokeObjectURL(fileUrl);
+      fileUrl = URL.createObjectURL(file); fileName = file.name;
+      video.srcObject = null; video.src = fileUrl; video.controls = true; video.style.display = 'block'; placeholder.style.display = 'none';
+      timeline = []; tracker = new Tracker(); renderTimeline(); clearOverlay();
+      video.onloadedmetadata = () => { analyzeBtn.disabled = false; scanBtn.disabled = false; setStatus('Vídeo carregado (' + fmtTime(video.duration) + ', ' + video.videoWidth + '×' + video.videoHeight + '). Clique em “Analisar partida”.', 'good'); };
+      video.onerror = () => setStatus('O navegador não conseguiu abrir este vídeo. Tente MP4 (H.264) ou WebM.', 'error');
+    }
+    function seekTo(t) {
+      return new Promise(resolve => {
+        if (Math.abs(video.currentTime - t) < 0.001) return resolve();
+        const done = () => { video.removeEventListener('seeked', done); clearTimeout(to); resolve(); };
+        const to = setTimeout(done, 5000);
+        video.addEventListener('seeked', done);
+        video.currentTime = t;
+      });
+    }
+    async function analyzeVideo() {
+      if (busy || !fileUrl) return;
+      const step = parseFloat($('stepSel').value), duration = video.duration;
+      if (!cvReady) { setStatus('O detector de cartas ainda não carregou (OpenCV). Aguarde alguns segundos.', 'error'); return; }
+      busy = analyzing = true; cancelAnalysis = false; video.pause();
+      timeline = []; tracker = new Tracker(); renderTimeline();
+      analyzeBtn.disabled = true; scanBtn.disabled = true; cancelBtn.disabled = false; progressEl.hidden = false; progressEl.max = duration; progressEl.value = 0;
+      try {
+        for (let t = 0; t <= duration && !cancelAnalysis; t += step) {
+          await seekTo(Math.min(t, Math.max(0, duration - 0.05)));
+          const canvas = captureFrame(); if (!canvas) break;
+          setStatus('Analisando ' + fmtTime(t) + ' / ' + fmtTime(duration) + ' — ' + timeline.length + ' evento(s)…');
+          await processFrame(canvas, t);
+          progressEl.value = t;
+        }
+        tracker.tracks.filter(tr => !tr.closed).forEach(closeEvent);
+        setStatus(cancelAnalysis ? 'Análise interrompida. ' + timeline.length + ' evento(s) registrado(s).' : 'Análise concluída: ' + timeline.length + ' evento(s). Clique num evento para ver a carta.', 'good');
+      } catch (err) { setStatus(err.message || 'Erro durante a análise.', 'error'); }
+      finally { busy = analyzing = false; analyzeBtn.disabled = false; scanBtn.disabled = false; cancelBtn.disabled = true; progressEl.hidden = true; }
+    }
+
+    /* ======================= Abas, consulta manual, exibição ======================= */
+    function setMode(m) {
+      if (m === mode) return;
+      mode = m; stopLive(); cancelAnalysis = true;
+      $('tabCamera').classList.toggle('active', m === 'camera'); $('tabFile').classList.toggle('active', m === 'file');
+      $('cameraControls').hidden = m !== 'camera'; $('fileControls').hidden = m !== 'file';
+      if (m === 'file') {
+        if (stream) stopCamera();
+        scanBtn.disabled = !fileUrl;
+        if (fileUrl) { video.src = fileUrl; video.controls = true; video.style.display = 'block'; placeholder.style.display = 'none'; }
+      } else {
+        video.pause(); video.removeAttribute('src'); video.load(); video.controls = false; video.style.display = 'none'; placeholder.style.display = 'block'; clearOverlay();
+        scanBtn.disabled = true;
+      }
+    }
+    async function searchManual() {
+      const name = $('manualName').value.trim();
+      if (!name) { setStatus('Digite o nome de uma carta para pesquisar.', 'error'); return; }
+      $('searchBtn').disabled = true; setStatus('Consultando a Scryfall…');
+      try { showCard(await fetchCard(name, false)); setStatus('Carta encontrada.', 'good'); }
+      catch (err) { setStatus(err.message, 'error'); }
+      finally { $('searchBtn').disabled = false; }
+    }
+    function translateRarity(r) { return ({ common: 'Comum', uncommon: 'Incomum', rare: 'Rara', mythic: 'Mítica', special: 'Especial', bonus: 'Bônus' })[r] || r || '—'; }
     function showCard(card) {
-      const image = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || '';
-      document.getElementById('cardImage').src = image;
-      document.getElementById('cardImage').alt = 'Carta ' + (card.name || '');
-      document.getElementById('cardName').textContent = card.printed_name || card.name || 'Nome indisponível';
-      document.getElementById('mana').textContent = card.mana_cost || card.card_faces?.[0]?.mana_cost || 'Sem custo de mana';
-      document.getElementById('typeLine').textContent = card.printed_type_line || card.type_line || card.card_faces?.[0]?.type_line || '';
-      document.getElementById('rules').textContent = card.printed_text || card.oracle_text || card.card_faces?.map(f => f.oracle_text || '').filter(Boolean).join('\n//\n') || 'Texto de regras indisponível.';
-      document.getElementById('setName').textContent = card.set_name || '—';
-      document.getElementById('rarity').textContent = translateRarity(card.rarity);
-      document.getElementById('collector').textContent = card.collector_number || '—';
-      document.getElementById('artist').textContent = card.artist || '—';
+      $('cardImage').src = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || '';
+      $('cardImage').alt = 'Carta ' + (card.name || '');
+      $('cardName').textContent = card.printed_name || card.name || 'Nome indisponível';
+      $('mana').textContent = card.mana_cost || card.card_faces?.[0]?.mana_cost || 'Sem custo de mana';
+      $('typeLine').textContent = card.printed_type_line || card.type_line || card.card_faces?.[0]?.type_line || '';
+      $('rules').textContent = card.printed_text || card.oracle_text || card.card_faces?.map(f => f.oracle_text || '').filter(Boolean).join('\n//\n') || 'Texto de regras indisponível.';
+      $('setName').textContent = card.set_name || '—'; $('rarity').textContent = translateRarity(card.rarity);
+      $('collector').textContent = card.collector_number || '—'; $('artist').textContent = card.artist || '—';
       const details = [];
       if (card.power !== undefined && card.toughness !== undefined) details.push('Força/Resistência: ' + card.power + '/' + card.toughness);
       if (card.loyalty) details.push('Lealdade: ' + card.loyalty);
       if (card.oracle_id) details.push('Oracle ID: ' + card.oracle_id);
-      document.getElementById('extraInfo').textContent = details.join(' · ');
-      emptyResult.style.display = 'none';
-      resultEl.style.display = 'block';
+      $('extraInfo').textContent = details.join(' · ');
+      emptyResult.style.display = 'none'; resultEl.style.display = 'block';
     }
 
-    function translateRarity(rarity) {
-      return ({common:'Comum', uncommon:'Incomum', rare:'Rara', mythic:'Mítica', special:'Especial', bonus:'Bônus'})[rarity] || rarity || '—';
+    /* ======================= OpenCV.js (carregado sob demanda) ======================= */
+    function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.async = true; s.onload = res; s.onerror = () => rej(new Error('falha ao carregar ' + src)); document.head.appendChild(s); }); }
+    function waitForCv(ms) {
+      return new Promise((res, rej) => {
+        const t0 = Date.now();
+        if (window.cv && typeof window.cv.then === 'function' && !window.cv.Mat) window.cv.then(m => { window.cv = m; });
+        const tick = () => { if (window.cv && window.cv.Mat) return res(); if (Date.now() - t0 > ms) return rej(new Error('tempo esgotado')); setTimeout(tick, 100); };
+        tick();
+      });
+    }
+    async function initCv() {
+      setStatus('Carregando o detector de cartas (OpenCV, ~8 MB)…');
+      for (const url of ['https://docs.opencv.org/4.8.0/opencv.js', 'https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.9.0-release.3/dist/opencv.js']) {
+        try { await loadScript(url); await waitForCv(30000); cvReady = true; setStatus('Detector pronto. Ative a câmera ou escolha um vídeo.', 'good'); return; } catch (_) {}
+      }
+      setStatus('Não consegui carregar o OpenCV (detector de cartas). A pesquisa manual continua funcionando; verifique a internet e recarregue a página.', 'error');
     }
 
+    $('tabCamera').addEventListener('click', () => setMode('camera'));
+    $('tabFile').addEventListener('click', () => setMode('file'));
     startBtn.addEventListener('click', startCamera);
-    autoBtn.addEventListener('click', startAutoScan);
     stopBtn.addEventListener('click', stopCamera);
-    scanBtn.addEventListener('click', identifyFromCamera);
-    window.addEventListener('pagehide', () => { if (ocrWorker) ocrWorker.terminate(); if (stream) stream.getTracks().forEach(track => track.stop()); });
-    document.getElementById('searchBtn').addEventListener('click', searchManual);
-    document.getElementById('manualName').addEventListener('keydown', e => { if (e.key === 'Enter') searchManual(); });
+    autoBtn.addEventListener('click', toggleLive);
+    scanBtn.addEventListener('click', () => scanCurrent());
+    $('fileInput').addEventListener('change', e => loadFile(e.target.files[0]));
+    analyzeBtn.addEventListener('click', analyzeVideo);
+    cancelBtn.addEventListener('click', () => { cancelAnalysis = true; });
+    $('searchBtn').addEventListener('click', searchManual);
+    $('manualName').addEventListener('keydown', e => { if (e.key === 'Enter') searchManual(); });
+    video.addEventListener('seeking', () => { if (!analyzing) clearOverlay(); });
+    window.addEventListener('pagehide', () => { if (ocrWorker) ocrWorker.terminate(); if (stream) stream.getTracks().forEach(tk => tk.stop()); });
+    initCv();
   </script>
 </body>
 </html>
