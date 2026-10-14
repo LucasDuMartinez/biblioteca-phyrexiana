@@ -54,7 +54,7 @@
   <header>
     <div class="mark" aria-hidden="true">Φ</div>
     <h1>Biblioteca Phyrexiana</h1>
-    <p>Protótipo 0.1 · Identificador de cartas de Magic: The Gathering por câmera</p>
+    <p>Protótipo 0.2 · Identificador de cartas de Magic: The Gathering por câmera</p>
   </header>
 
   <main>
@@ -186,28 +186,37 @@
       return canvas;
     }
 
-    // Recorta a faixa superior central, onde normalmente fica o nome, e amplia para ajudar o OCR.
-    function makeTitleCrop(source) {
-      const crop = document.createElement('canvas');
-      const sx = Math.round(source.width * 0.16);
-      const sy = Math.round(source.height * 0.02);
-      const sw = Math.round(source.width * 0.68);
-      const sh = Math.round(source.height * 0.32);
-      crop.width = Math.min(sw * 2, 1400);
-      crop.height = Math.round(crop.width * sh / sw);
-      const ctx = crop.getContext('2d', { willReadFrequently: true });
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(source, sx, sy, sw, sh, 0, 0, crop.width, crop.height);
-      // Aumenta contraste sem depender de bibliotecas adicionais.
-      const image = ctx.getImageData(0, 0, crop.width, crop.height);
-      for (let i = 0; i < image.data.length; i += 4) {
-        const gray = image.data[i] * 0.299 + image.data[i+1] * 0.587 + image.data[i+2] * 0.114;
-        const adjusted = gray < 145 ? Math.max(0, gray * 0.72) : Math.min(255, gray * 1.16 + 18);
-        image.data[i] = image.data[i+1] = image.data[i+2] = adjusted;
-      }
-      ctx.putImageData(image, 0, 0);
-      return crop;
+    // Gera recortes candidatos da zona central da imagem, onde a carta costuma estar.
+    // A câmera pode mostrar a carta pequena no meio do quadro; por isso não usamos
+    // apenas uma faixa fixa no topo da imagem inteira.
+    function makeTitleCrops(source) {
+      const regions = [
+        { x: 0.24, y: 0.16, w: 0.52, h: 0.28, label: 'topo central' },
+        { x: 0.18, y: 0.10, w: 0.64, h: 0.34, label: 'topo amplo' },
+        { x: 0.28, y: 0.22, w: 0.44, h: 0.22, label: 'faixa central estreita' }
+      ];
+      return regions.map(region => {
+        const sx = Math.round(source.width * region.x);
+        const sy = Math.round(source.height * region.y);
+        const sw = Math.round(source.width * region.w);
+        const sh = Math.round(source.height * region.h);
+        const crop = document.createElement('canvas');
+        crop.width = Math.min(sw * 3, 1800);
+        crop.height = Math.round(crop.width * sh / sw);
+        const ctx = crop.getContext('2d', { willReadFrequently: true });
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(source, sx, sy, sw, sh, 0, 0, crop.width, crop.height);
+        const image = ctx.getImageData(0, 0, crop.width, crop.height);
+        for (let i = 0; i < image.data.length; i += 4) {
+          const gray = image.data[i] * 0.299 + image.data[i+1] * 0.587 + image.data[i+2] * 0.114;
+          const adjusted = gray < 145 ? Math.max(0, gray * 0.72) : Math.min(255, gray * 1.16 + 18);
+          image.data[i] = image.data[i+1] = image.data[i+2] = adjusted;
+        }
+        ctx.putImageData(image, 0, 0);
+        crop.dataset.region = region.label;
+        return crop;
+      });
     }
 
     async function getOcrWorker() {
@@ -236,26 +245,36 @@
     async function recognizeCandidates() {
       const frame = captureFrame();
       const worker = await getOcrWorker();
-      const titleCrop = makeTitleCrop(frame);
-      const titleResult = await worker.recognize(titleCrop);
-      const titleText = cleanCandidate(titleResult.data.text);
-      let fullText = '';
-      // Se o recorte do nome não der resultado, tenta a imagem inteira como plano B.
-      if (titleText.length < 3 || (titleResult.data.confidence || 0) < 18) {
-        await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.AUTO });
-        const fullResult = await worker.recognize(frame);
-        fullText = fullResult.data.text || '';
+      const crops = makeTitleCrops(frame);
+      const cropReads = [];
+      for (const crop of crops) {
         await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE });
+        const result = await worker.recognize(crop);
+        const text = cleanCandidate(result.data.text);
+        cropReads.push({
+          text,
+          confidence: result.data.confidence || 0,
+          region: crop.dataset.region
+        });
       }
-      ocrDebug.textContent = 'Faixa do nome: ' + (titleText || '(nada legível)') +
-        '\nConfiança OCR: ' + Math.round(titleResult.data.confidence || 0) + '%' +
-        (fullText ? '\n\nLeitura alternativa:\n' + fullText : '');
-      const lines = [titleText, ...fullText.split(/\r?\n/).map(cleanCandidate)]
+      cropReads.sort((a, b) => (b.confidence + Math.min(b.text.length, 24)) - (a.confidence + Math.min(a.text.length, 24)));
+      const titleText = cropReads.find(r => r.text.length >= 3)?.text || '';
+      let fullText = '';
+      // Faz uma leitura ampla adicional como apoio, sem depender dela para o nome.
+      await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.AUTO });
+      const fullResult = await worker.recognize(frame);
+      fullText = fullResult.data.text || '';
+      await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE });
+      ocrDebug.textContent = cropReads.map((r, i) =>
+        'Recorte ' + (i + 1) + ' (' + r.region + '): ' + (r.text || '(nada legível)') +
+        ' — confiança ' + Math.round(r.confidence) + '%'
+      ).join('\n') + '\n\nLeitura da imagem inteira:\n' + (fullText || '(nada legível)');
+      const lines = [...cropReads.map(r => r.text), ...fullText.split(/\r?\n/).map(cleanCandidate)]
         .filter(Boolean)
         .filter(line => line.length >= 3 && line.length <= 70);
       const unique = [];
       for (const line of lines) if (!unique.some(x => x.toLowerCase() === line.toLowerCase())) unique.push(line);
-      return unique.slice(0, 8);
+      return unique.slice(0, 12);
     }
 
     async function identifyFromCamera() {
